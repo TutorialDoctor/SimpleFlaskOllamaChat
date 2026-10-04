@@ -1,0 +1,28 @@
+{%extends 'layout.html'%}
+
+{% block content %}
+
+<div class="mt-8 container mx-auto border rounded-lg p-8">
+    <div id="response-container" class="h-[800px] overflow-y-scroll">
+    </div>
+</div>
+
+<div class="absolute bottom-0 mx-auto mb-8 flex justify-center w-full">
+<form hx-post="/" hx-target="#response-container" hx-swap="beforeend" hx-on::after-request="if(event.detail.successful) this.reset()">
+    <input placeholder="prompt here" class="px-2 py-1 h-8 bg-gray-200" type="text" name="prompt" />
+    <button class="ml-4 bg-black text-white px-2 py-1 " type="submit">Send</button>
+</form>
+</div>
+
+
+<style>
+    #response-container {
+    -ms-overflow-style: none;  /* Internet Explorer 10+ */
+    scrollbar-width: none;  /* Firefox, Safari 18.2+, Chromium 121+ */
+}
+#response-container::-webkit-scrollbar { 
+    display: none;  /* Older Safari and Chromium */
+}
+</style>
+
+{% endblock %}
