@@ -28,14 +28,21 @@ async def home():
 
 @app.route("/chat", methods=["POST"])
 async def llm_response():
-    form = await request.form
-    prompt = form.get('prompt', '')
-    model = form.get('model') or 'llama3.2'
+    data = await request.get_json() or await request.form
+    prompt = data.get('prompt', '')
+    model = data.get('model') or 'llama3.2'
+    
+    # Expect the frontend to pass the existing message history array
+    messages = data.get('messages', [])
+    
+    # Append the new user prompt if not already included by frontend
+    if not messages or messages[-1].get('content') != prompt:
+        messages.append({'role': 'user', 'content': prompt})
 
-    messages = [{'role': 'user', 'content': prompt}]
     can_use_tools = any(name in model.lower() for name in ['llama3.1', 'llama3.2', 'qwen3.5:4b', 'mistral', 'command-r'])
     
     async def generate_stream():
+        full_assistant_content = ""
         try:
             kwargs = {'model': model, 'messages': messages, 'stream': True}
             if can_use_tools:
@@ -45,17 +52,18 @@ async def llm_response():
             
             tool_calls = []
             async for chunk in stream:
-                # Stream text content live as it arrives
                 if chunk.message.content:
+                    full_assistant_content += chunk.message.content
                     yield chunk.message.content
                 
-                # Capture any tool calls if triggered
                 if chunk.message.tool_calls:
                     tool_calls.extend(chunk.message.tool_calls)
 
-            # 2. If a tool was triggered during the stream, process it and stream the final answer
             if tool_calls:
-                messages.append({'role': 'assistant', 'tool_calls': tool_calls})
+                assistant_msg = {'role': 'assistant', 'tool_calls': tool_calls}
+                if full_assistant_content:
+                    assistant_msg['content'] = full_assistant_content
+                messages.append(assistant_msg)
                 
                 tool_output_str = ""
                 for tool in tool_calls:
@@ -70,11 +78,16 @@ async def llm_response():
                     'content': tool_output_str
                 })
                 
-                # 3. Stream the final summary response based on the tool result
                 final_stream = await client.chat(model=model, messages=messages, stream=True)
+                final_assistant_content = ""
                 async for chunk in final_stream:
                     if chunk.message.content:
+                        final_assistant_content += chunk.message.content
                         yield chunk.message.content
+                
+                messages.append({'role': 'assistant', 'content': final_assistant_content})
+            else:
+                messages.append({'role': 'assistant', 'content': full_assistant_content})
 
         except Exception as e:
             print(f"Stream Error: {str(e)}")
