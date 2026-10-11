@@ -18,11 +18,11 @@ def llm_response():
         prompt=prompt
     )
     return f"""<div>
-                            <span
-                                class="text-right bg-zinc-800 text-white p-2 rounded-lg flex w-max max-w-[75%] flex-col rounded-lg px-3 py-2 ml-auto">{prompt}</span>
-                            <span
-                                class="text-left my-3 bg-gray-200 text-gray-700 p-2 rounded-lg flex w-max max-w-[75%] flex-col rounded-lg px-3 py-2">{response['response']}</span>
-                        </div>"""
+        <span
+            class="text-right bg-zinc-800 text-white p-2 rounded-lg flex w-max max-w-[75%] flex-col rounded-lg px-3 py-2 ml-auto">{prompt}</span>
+        <span
+            class="text-left my-3 bg-gray-200 text-gray-700 p-2 rounded-lg flex w-max max-w-[75%] flex-col rounded-lg px-3 py-2">{response['response']}</span>
+        </div>"""
 
 if __name__ == '__main__':
     app.run(debug=True,port=4006)

@@ -10,8 +10,7 @@
 </div>
 
 <div class="absolute bottom-0 mx-auto mb-8 flex justify-center w-full">
-    <form hx-post="/chat" hx-target="#response-container" hx-swap="beforeend"
-        hx-on::after-request="if(event.detail.successful) this.reset()" hx-indicator="#main-spinner">
+    <form hx-post="/chat" hx-target="#response-container" hx-swap="beforeend" hx-on:htmx:after-request="if(event.detail.successful) this.querySelector('input[name=prompt]').value = ''" hx-indicator="#main-spinner">
         <select name="model" class="w-1/2">
             {%for model in models%}
             <option value="{{model['model']}}">{{model['model']}}</option>
@@ -21,7 +20,6 @@
         <button class="ml-4 bg-black text-white px-2 py-1 " type="submit">Send</button>
     </form>
 </div>
-
 
 <style>
     #response-container {
