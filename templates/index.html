@@ -2,53 +2,99 @@
 
 {% block content %}
 
-<div id="chat-box" class="m-20 p-4 rounded-lg border border-zinc-800 shadow-md">
+<div id="chat-box" class="m-20 p-4 rounded-lg border border-zinc-800 shadow-md h-[60vh] overflow-y-auto">
     <div class="mt-4">
-        <div class="text-xs" id="response-container">
+        <div class="text-xs flex flex-col gap-3" id="response-container">
         </div>
     </div>
 </div>
 
 <div class="absolute bottom-0 mx-auto mb-8 flex justify-center w-full">
-    <form hx-post="/chat" hx-target="#response-container" hx-swap="beforeend"
-        hx-on:htmx:config-request="handlePrompt(this)" hx-indicator="#main-spinner">
-        <select name="model" class="w-1/2">
+    <!-- Plain form handled by custom JS stream below -->
+    <form id="chat-form" class="w-2/3 flex gap-2">
+        <select name="model" class="w-1/4 px-2 py-1 bg-gray-100 border rounded">
             {% for model in models %}
             <option value="{{ model['model'] }}">{{ model['model'] }}</option>
             {% endfor %}
-        </select><br>
-        <input placeholder="prompt here" class="px-2 py-1 h-8 bg-gray-200" type="text" name="prompt" required />
-        <button class="ml-4 bg-black text-white px-2 py-1" type="submit">Send</button>
+        </select>
+        <input placeholder="prompt here..." class="flex-1 px-2 py-1 h-8 bg-gray-200 border rounded" type="text" name="prompt" required />
+        <button class="bg-black text-white px-4 py-1 rounded" type="submit">Send</button>
     </form>
 </div>
 
 <style>
-    #response-container {
+    #chat-box {
         -ms-overflow-style: none;
         scrollbar-width: none;
     }
-
-    #response-container::-webkit-scrollbar {
+    #chat-box::-webkit-scrollbar {
         display: none;
     }
 </style>
 
 <script>
-    function handlePrompt(form) {
-        const input = form.querySelector('input[name=prompt]');
-        const text = input.value;
+document.getElementById('chat-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const form = e.target;
+    const formData = new FormData(form);
+    const promptText = formData.get('prompt');
+    const container = document.getElementById('response-container');
+    
+    if (!promptText.trim()) return;
 
-        if (text.trim()) {
-            document.getElementById('response-container').insertAdjacentHTML('beforeend', `
-            <div class='flex flex-col'>
-                <span class='text-right bg-zinc-800 text-white p-2 rounded-lg flex w-max max-w-[75%] flex-col px-3 py-2 ml-auto'>${text}</span>
-            </div>
-        `);
-            setTimeout(() => {
-                input.value = '';
-            }, 10);
+    // 1. Render user prompt instantly
+    container.insertAdjacentHTML('beforeend', `
+        <div class='flex flex-col'>
+            <span class='text-right bg-zinc-800 text-white p-2 rounded-lg flex w-max max-w-[75%] px-3 py-2 ml-auto'>${escapeHtml(promptText)}</span>
+        </div>
+    `);
+    
+    // Clear input
+    form.querySelector('input[name=prompt]').value = '';
+
+    // 2. Create an empty AI response bubble that we will stream text into
+    const aiBubbleId = 'ai-response-' + Date.now();
+    container.insertAdjacentHTML('beforeend', `
+        <div class='flex flex-col'>
+            <span id="${aiBubbleId}" class='text-left my-1 bg-gray-200 text-gray-700 p-2 rounded-lg flex w-max max-w-[75%] px-3 py-2 whitespace-pre-wrap'></span>
+        </div>
+    `);
+    const aiBubble = document.getElementById(aiBubbleId);
+
+    // Auto-scroll to bottom
+    const chatBox = document.getElementById('chat-box');
+    chatBox.scrollTop = chatBox.scrollHeight;
+
+    try {
+        // 3. Send POST request to Quart backend
+        const response = await fetch('/chat', {
+            method: 'POST',
+            body: formData
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        // 4. Read the stream chunk by chunk as tokens arrive
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            
+            const chunk = decoder.decode(value, { stream: true });
+            aiBubble.textContent += chunk; // Append live tokens
+            chatBox.scrollTop = chatBox.scrollHeight; // Keep scrolling down
         }
+    } catch (err) {
+        aiBubble.textContent += "\n[Connection Error]";
     }
+});
+
+// Simple HTML escaper helper to prevent XSS
+function escapeHtml(text) {
+    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+    return text.replace(/[&<>"']/g, m => map[m]);
+}
 </script>
 
 {% endblock %}
