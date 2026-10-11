@@ -11,3 +11,5 @@ https://ollama.com/download
 Download Ollama model
 
 `ollama pull gemma3:270m`
+
+> Note: There is a quart version with streaming in another branch.
