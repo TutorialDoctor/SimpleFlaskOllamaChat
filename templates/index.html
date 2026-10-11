@@ -16,7 +16,8 @@
             <option value="{{ model['model'] }}">{{ model['model'] }}</option>
             {% endfor %}
         </select>
-        <input placeholder="prompt here..." class="flex-1 px-2 py-1 h-8 bg-gray-200 border rounded" type="text" name="prompt" required />
+        <input placeholder="prompt here..." class="flex-1 px-2 py-1 h-8 bg-gray-200 border rounded" type="text"
+            name="prompt" required />
         <button class="bg-black text-white px-4 py-1 rounded" type="submit">Send</button>
     </form>
 </div>
@@ -26,94 +27,95 @@
         -ms-overflow-style: none;
         scrollbar-width: none;
     }
+
     #chat-box::-webkit-scrollbar {
         display: none;
     }
 </style>
 
 <script>
-// 1. Array to hold the conversation messages state
-let chatHistory = [];
+    // 1. Array to hold the conversation messages state
+    let chatHistory = [];
 
-document.getElementById('chat-form').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const form = e.target;
-    const promptInput = form.querySelector('input[name=prompt]');
-    const modelSelect = form.querySelector('select[name=model]');
-    
-    const promptText = promptInput.value.trim();
-    const selectedModel = modelSelect.value;
-    const container = document.getElementById('response-container');
-    
-    if (!promptText) return;
+    document.getElementById('chat-form').addEventListener('submit', async function (e) {
+        e.preventDefault();
 
-    // Render user prompt instantly in UI
-    container.insertAdjacentHTML('beforeend', `
+        const form = e.target;
+        const promptInput = form.querySelector('input[name=prompt]');
+        const modelSelect = form.querySelector('select[name=model]');
+
+        const promptText = promptInput.value.trim();
+        const selectedModel = modelSelect.value;
+        const container = document.getElementById('response-container');
+
+        if (!promptText) return;
+
+        // Render user prompt instantly in UI
+        container.insertAdjacentHTML('beforeend', `
         <div class='flex flex-col'>
             <span class='text-right bg-zinc-800 text-white p-2 rounded-lg flex w-max max-w-[75%] px-3 py-2 ml-auto'>${escapeHtml(promptText)}</span>
         </div>
     `);
-    
-    // Clear input field
-    promptInput.value = '';
 
-    // Create an empty AI response bubble for streaming
-    const aiBubbleId = 'ai-response-' + Date.now();
-    container.insertAdjacentHTML('beforeend', `
+        // Clear input field
+        promptInput.value = '';
+
+        // Create an empty AI response bubble for streaming
+        const aiBubbleId = 'ai-response-' + Date.now();
+        container.insertAdjacentHTML('beforeend', `
         <div class='flex flex-col'>
             <span id="${aiBubbleId}" class='text-left my-1 bg-gray-200 text-gray-700 p-2 rounded-lg flex w-max max-w-[75%] px-3 py-2 whitespace-pre-wrap'></span>
         </div>
     `);
-    const aiBubble = document.getElementById(aiBubbleId);
+        const aiBubble = document.getElementById(aiBubbleId);
 
-    // Auto-scroll to bottom
-    const chatBox = document.getElementById('chat-box');
-    chatBox.scrollTop = chatBox.scrollHeight;
+        // Auto-scroll to bottom
+        const chatBox = document.getElementById('chat-box');
+        chatBox.scrollTop = chatBox.scrollHeight;
 
-    try {
-        // 2. Send JSON payload containing prompt, model, and history array
-        const response = await fetch('/chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                prompt: promptText,
-                model: selectedModel,
-                messages: chatHistory
-            })
-        });
+        try {
+            // 2. Send JSON payload containing prompt, model, and history array
+            const response = await fetch('/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    prompt: promptText,
+                    model: selectedModel,
+                    messages: chatHistory
+                })
+            });
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let fullAssistantResponse = "";
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let fullAssistantResponse = "";
 
-        // 3. Read stream chunk by chunk as tokens arrive
-        while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            
-            const chunk = decoder.decode(value, { stream: true });
-            fullAssistantResponse += chunk;
-            aiBubble.textContent += chunk; 
-            chatBox.scrollTop = chatBox.scrollHeight; 
+            // 3. Read stream chunk by chunk as tokens arrive
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                fullAssistantResponse += chunk;
+                aiBubble.textContent += chunk;
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+
+            // 4. Update local history after stream finishes successfully
+            chatHistory.push({ role: 'user', content: promptText });
+            chatHistory.push({ role: 'assistant', content: fullAssistantResponse });
+
+        } catch (err) {
+            aiBubble.textContent += "\n[Connection Error]";
         }
+    });
 
-        // 4. Update local history after stream finishes successfully
-        chatHistory.push({ role: 'user', content: promptText });
-        chatHistory.push({ role: 'assistant', content: fullAssistantResponse });
-
-    } catch (err) {
-        aiBubble.textContent += "\n[Connection Error]";
+    // Simple HTML escaper helper to prevent XSS
+    function escapeHtml(text) {
+        const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+        return text.replace(/[&<>"']/g, m => map[m]);
     }
-});
-
-// Simple HTML escaper helper to prevent XSS
-function escapeHtml(text) {
-    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
-    return text.replace(/[&<>"']/g, m => map[m]);
-}
 </script>
 
 {% endblock %}

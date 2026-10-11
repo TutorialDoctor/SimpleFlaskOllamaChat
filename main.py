@@ -1,9 +1,14 @@
 import ollama
 from quart import Quart, render_template, request, Response
+from datetime import datetime
+import json
 
 app = Quart(__name__)
 client = ollama.AsyncClient()
 
+# ==========================================
+# 1. DEFINE YOUR TOOLS
+# ==========================================
 def add_two_numbers(a: int, b: int) -> int:
     """
     Add two numbers
@@ -16,6 +21,24 @@ def add_two_numbers(a: int, b: int) -> int:
         int: The sum of the two numbers
     """
     return a + b
+
+def get_current_time(time_format: str = "%H:%M:%S") -> str:
+    """
+    Returns the current local time. 
+
+    Args:
+        time_format (str): Standard strftime format string (e.g., "%H:%M:%S" or "%I:%M %p"). Defaults to "%H:%M:%S".
+    """
+    return datetime.now().strftime(time_format)
+
+# ==========================================
+# 2. CENTRAL TOOL REGISTRY
+# ==========================================
+# Just add any new python function to this dictionary to instantly register it!
+AVAILABLE_TOOLS = {
+    'add_two_numbers': add_two_numbers,
+    'get_current_time': get_current_time
+}
 
 @app.route("/", methods=["GET"])
 async def home():
@@ -31,22 +54,20 @@ async def llm_response():
     data = await request.get_json() or await request.form
     prompt = data.get('prompt', '')
     model = data.get('model') or 'llama3.2'
-    
-    # Expect the frontend to pass the existing message history array
     messages = data.get('messages', [])
     
-    # Append the new user prompt if not already included by frontend
     if not messages or messages[-1].get('content') != prompt:
         messages.append({'role': 'user', 'content': prompt})
 
-    can_use_tools = any(name in model.lower() for name in ['llama3.1', 'llama3.2', 'qwen3.5:4b', 'mistral', 'command-r'])
+    can_use_tools = any(name in model.lower() for name in ['llama3.1', 'llama3.2', 'qwen3.5:4b', 'mistral', 'command-r', 'qwen2.5'])
     
     async def generate_stream():
         full_assistant_content = ""
         try:
             kwargs = {'model': model, 'messages': messages, 'stream': True}
             if can_use_tools:
-                kwargs['tools'] = [add_two_numbers]
+                # Dynamically pass all Python function objects registered in our map
+                kwargs['tools'] = list(AVAILABLE_TOOLS.values())
 
             stream = await client.chat(**kwargs)
             
@@ -60,24 +81,33 @@ async def llm_response():
                     tool_calls.extend(chunk.message.tool_calls)
 
             if tool_calls:
+                # Establish assistant intent context
                 assistant_msg = {'role': 'assistant', 'tool_calls': tool_calls}
                 if full_assistant_content:
                     assistant_msg['content'] = full_assistant_content
                 messages.append(assistant_msg)
                 
-                tool_output_str = ""
+                # Execute every requested tool cleanly using our registry lookup
                 for tool in tool_calls:
-                    if tool.function.name == 'add_two_numbers':
-                        args = tool.function.arguments
-                        result = add_two_numbers(**args)
-                        tool_output_str = f"Result of {tool.function.name}({args}) is {result}"
-                        yield f"\n\n[Tool Called: {tool.function.name}({args}) -> Result: {result}]\n\n"
-                
-                messages.append({
-                    'role': 'tool',
-                    'content': tool_output_str
-                })
-                
+                    tool_name = tool.function.name
+                    args = tool.function.arguments
+
+                    if tool_name in AVAILABLE_TOOLS:
+                        # Call the registered python function dynamically matching arguments
+                        result = AVAILABLE_TOOLS[tool_name](**args)
+                        
+                        yield f"\n\n[Tool Called: {tool_name}({args}) -> Result: {result}]\n\n"
+                        
+                        # Add a dedicated message for every distinct tool block executed
+                        messages.append({
+                            'role': 'tool',
+                            'name': tool_name,  # Essential for LLM debugging alignment
+                            'content': str(result)
+                        })
+                    else:
+                        yield f"\n\n[Error: Requested tool '{tool_name}' is unregistered]\n\n"
+
+                # Send back to Ollama to synthesize the tool answers into structural text
                 final_stream = await client.chat(model=model, messages=messages, stream=True)
                 final_assistant_content = ""
                 async for chunk in final_stream:
