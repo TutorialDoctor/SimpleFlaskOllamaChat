@@ -10,58 +10,45 @@
 </div>
 
 <div class="absolute bottom-0 mx-auto mb-8 flex justify-center w-full">
-    <!-- <form hx-post="/chat" hx-target="#response-container" hx-swap="beforeend" hx-on:htmx:after-request="if(event.detail.successful) this.querySelector('input[name=prompt]').value = ''" hx-indicator="#main-spinner">
+    <form hx-post="/chat" hx-target="#response-container" hx-swap="beforeend"
+        hx-on:htmx:config-request="handlePrompt(this)" hx-indicator="#main-spinner">
         <select name="model" class="w-1/2">
-            {%for model in models%}
-            <option value="{{model['model']}}">{{model['model']}}</option>
-            {%endfor%}
+            {% for model in models %}
+            <option value="{{ model['model'] }}">{{ model['model'] }}</option>
+            {% endfor %}
         </select><br>
-        <input placeholder="prompt here" class="px-2 py-1 h-8 bg-gray-200" type="text" name="prompt" />
-        <button class="ml-4 bg-black text-white px-2 py-1 " type="submit">Send</button>
-    </form> -->
-
-    <form hx-post="/chat" 
-      hx-target="#response-container" 
-      hx-swap="beforeend"
-      hx-on:htmx:before-request="
-          const input = this.querySelector('input[name=prompt]');
-          const text = input.value;
-          if (text.trim()) {
-              document.getElementById('response-container').insertAdjacentHTML('beforeend', `
-                  <div class='flex flex-col'>
-                      <span class='text-right bg-zinc-800 text-white p-2 rounded-lg flex w-max max-w-[75%] flex-col px-3 py-2 ml-auto'>${text}</span>
-                  </div>
-              `);
-              input.value = '';
-          }
-      "
-      hx-indicator="#main-spinner">
-    <select name="model" class="w-1/2">
-        {% for model in models %}
-        <option value="{{ model['model'] }}">{{ model['model'] }}</option>
-        {% endfor %}
-    </select><br>
-    <input placeholder="prompt here" class="px-2 py-1 h-8 bg-gray-200" type="text" name="prompt" required />
-    <button class="ml-4 bg-black text-white px-2 py-1" type="submit">Send</button>
-</form>
+        <input placeholder="prompt here" class="px-2 py-1 h-8 bg-gray-200" type="text" name="prompt" required />
+        <button class="ml-4 bg-black text-white px-2 py-1" type="submit">Send</button>
+    </form>
 </div>
 
 <style>
     #response-container {
         -ms-overflow-style: none;
-        /* Internet Explorer 10+ */
         scrollbar-width: none;
-        /* Firefox, Safari 18.2+, Chromium 121+ */
     }
 
     #response-container::-webkit-scrollbar {
         display: none;
-        /* Older Safari and Chromium */
     }
-
-    /* *{
-    outline: 1px solid black
-} */
 </style>
+
+<script>
+    function handlePrompt(form) {
+        const input = form.querySelector('input[name=prompt]');
+        const text = input.value;
+
+        if (text.trim()) {
+            document.getElementById('response-container').insertAdjacentHTML('beforeend', `
+            <div class='flex flex-col'>
+                <span class='text-right bg-zinc-800 text-white p-2 rounded-lg flex w-max max-w-[75%] flex-col px-3 py-2 ml-auto'>${text}</span>
+            </div>
+        `);
+            setTimeout(() => {
+                input.value = '';
+            }, 10);
+        }
+    }
+</script>
 
 {% endblock %}
